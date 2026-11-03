@@ -43,6 +43,20 @@ public:
             result = registers_[rs1] + immediate;
         } else if (opcode == 0x33 && funct3 == 0 && funct7 == 0) { // ADD
             result = registers_[rs1] + registers_[rs2];
+        } else if (opcode == 0x63 && (funct3 == 0 || funct3 == 1)) {
+            // B-type immediate is a signed 13-bit byte offset from this PC.
+            std::uint64_t offset = ((instruction >> 31) << 12)
+                | (((instruction >> 7) & 1) << 11)
+                | (((instruction >> 25) & 0x3f) << 5)
+                | (((instruction >> 8) & 0xf) << 1);
+            if (offset & 0x1000) offset |= ~std::uint64_t{0x1fff};
+            const bool equal = registers_[rs1] == registers_[rs2];
+            const bool taken = funct3 == 0 ? equal : !equal;
+            const auto next_pc = taken ? pc_ + offset : pc_ + 4;
+            if (next_pc % 4 != 0)
+                throw std::runtime_error("Misaligned instruction address");
+            pc_ = next_pc;
+            return; // Branches do not write a destination register.
         } else {
             throw std::runtime_error("Unsupported or illegal instruction");
         }
