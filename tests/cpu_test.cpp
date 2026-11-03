@@ -29,6 +29,25 @@ int main() {
     for (auto word : {0u, 0x402081b3u, 0x00101093u}) {
         cpu.load_program({word}); expect_error(cpu);
     }
+    cpu.load_program({0x00500093, 0x00110133, 0xfff08093, 0xfe009ce3});
+    for (unsigned i = 0; i < 16; ++i) cpu.step();
+    check(cpu.pc() == 16 && cpu.reg(1) == 0 && cpu.reg(2) == 15);
+    // Forward BEQ skips an instruction; x0 remains immutable.
+    cpu.load_program({0x00000463, 0x00100093, 0x00200093});
+    cpu.step(); check(cpu.pc() == 8 && cpu.reg(0) == 0);
+    cpu.step(); check(cpu.reg(1) == 2);
+    // BEQ not taken, then BNE not taken.
+    cpu.load_program({0x00100093, 0x00008463, 0x00109463});
+    cpu.step(); cpu.step(); check(cpu.pc() == 8);
+    cpu.step(); check(cpu.pc() == 12);
+    // Misaligned target faults only when the branch is taken.
+    cpu.load_program({0x00000163}); expect_error(cpu);
+    cpu.load_program({0x00001163}); cpu.step(); check(cpu.pc() == 4);
+    cpu.load_program({0x00002063}); expect_error(cpu);
+    // Positive and negative B-immediate limits.
+    cpu.load_program({0x7e000ee3}); cpu.step(); check(cpu.pc() == 4092);
+    cpu.load_program({0x80000063}); cpu.step();
+    check(cpu.pc() == std::uint64_t{0} - 4096); expect_error(cpu);
     Cpu small(4);
     small.load_program({0x00000013}); small.step(); expect_error(small);
     Cpu empty(0); expect_error(empty);
